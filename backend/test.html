@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CareerConnect Test</title>
+</head>
+
+<body>
+
+    <h2>CareerConnect API Test</h2>
+
+    <button onclick="register()">Register Test User</button>
+    <button onclick="login()">Login Test User</button>
+    <button onclick="getProfile()">Get Profile</button>
+    <button onclick="updateProfile()">Update Profile</button>
+    <button onclick="uploadProfilePicture()">Upload picture</button>
+    <button onclick="createPost()">Create Post</button>
+    <button onclick="getPosts()">Get All Posts</button>
+    <button onclick="likePost()">Like Post</button>
+    <button onclick="addComment()">Add Comment</button>
+    <button onclick="getComments()">Get Comments</button>
+    <button onclick="deletePost()">Delete post</button>
+    <button onclick="updatePost()">Update Post</button>
+
+
+    <script>
+        async function register() {
+            try {
+                const response = await fetch(
+                    "http://localhost:8080/api/users/register",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            name: "Sushmita",
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const data = await response.json();
+                alert(JSON.stringify(data));
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+
+        async function login() {
+            try {
+                const response = await fetch(
+                    "http://localhost:8080/api/users/login",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const data = await response.json();
+
+                alert(JSON.stringify(data));
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+        async function getProfile() {
+            try {
+                const loginResponse = await fetch(
+                    "http://localhost:8080/api/users/login",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const loginData = await loginResponse.json();
+
+                const token = loginData.token;
+
+                const profileResponse = await fetch(
+                    "http://localhost:8080/api/users/profile",
+                    {
+                        method: "GET",
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    }
+                );
+
+                const profileData = await profileResponse.json();
+
+                alert(JSON.stringify(profileData));
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+        async function updateProfile() {
+            try {
+                const loginResponse = await fetch(
+                    "http://localhost:8080/api/users/login",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+
+                // Update profile
+                const response = await fetch(
+                    "http://localhost:8080/api/users/profile/update",
+                    {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer " + token
+                        },
+                        body: JSON.stringify({
+                            name: "Sushmita Updated"
+                        })
+                    }
+                );
+
+                const data = await response.json();
+
+                alert(JSON.stringify(data));
+
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+        async function uploadProfilePicture() {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/*";
+
+            input.onchange = async () => {
+                try {
+                    const file = input.files[0];
+
+                    if (!file) return;
+
+                    // Login to get JWT token
+                    const loginResponse = await fetch(
+                        "http://localhost:8080/api/users/login",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                email: "test123@gmail.com",
+                                password: "123456"
+                            })
+                        }
+                    );
+
+                    const loginData = await loginResponse.json();
+                    const token = loginData.token;
+
+                    // Create FormData
+                    const formData = new FormData();
+                    formData.append("profilePicture", file);
+
+                    // Upload picture
+                    const response = await fetch(
+                        "http://localhost:8080/api/users/profile/update",
+                        {
+                            method: "PUT",
+                            headers: {
+                                "Authorization": "Bearer " + token
+                            },
+                            body: formData
+                        }
+                    );
+
+                    const data = await response.json();
+
+                    alert(JSON.stringify(data));
+
+                } catch (error) {
+                    alert("Error: " + error.message);
+                }
+            };
+
+            input.click();
+        }
+        async function createPost() {
+            try {
+                // Login first to get JWT
+                const loginResponse = await fetch(
+                    "http://localhost:8080/api/users/login",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+
+                // Create post
+                const response = await fetch(
+                    "http://localhost:8080/api/posts/create",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer " + token
+                        },
+                        body: JSON.stringify({
+                            content: "Hello! This is my first CareerConnect post."
+                        })
+                    }
+                );
+
+                const data = await response.json();
+
+                alert(JSON.stringify(data));
+
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+        async function getPosts() {
+            try {
+                // Login first to get token
+                const loginResponse = await fetch(
+                    "http://localhost:8080/api/users/login",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+
+                // Get all posts
+                const response = await fetch(
+                    "http://localhost:8080/api/posts/all",
+                    {
+                        method: "GET",
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    }
+                );
+
+                const data = await response.json();
+
+                alert(JSON.stringify(data));
+
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+        async function likePost() {
+            try {
+                // Login to get token
+                const loginResponse = await fetch(
+                    "http://localhost:8080/api/users/login",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+
+                // First get posts to get the post ID
+                const postsResponse = await fetch(
+                    "http://localhost:8080/api/posts/all",
+                    {
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    }
+                );
+
+                const postsData = await postsResponse.json();
+
+                if (!postsData.posts || postsData.posts.length === 0) {
+                    alert("No posts found");
+                    return;
+                }
+
+                const postId = postsData.posts[0]._id;
+                alert("Post ID" + postId);
+
+                // Like the first post
+                const response = await fetch(
+                    "http://localhost:8080/api/posts/" + postId + "/like",
+                    {
+                        method: "PUT",
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    }
+                );
+
+                const data = await response.json();
+
+                alert(JSON.stringify(data));
+
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+        async function addComment() {
+            try {
+                const loginResponse = await fetch(
+                    "http://localhost:8080/api/users/login",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+
+                const postsResponse = await fetch(
+                    "http://localhost:8080/api/posts/all",
+                    {
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    }
+                );
+
+                const postsData = await postsResponse.json();
+
+                if (!postsData.posts || postsData.posts.length === 0) {
+                    alert("No posts found");
+                    return;
+                }
+
+                const postId = postsData.posts[0]._id;
+
+                const response = await fetch(
+                    "http://localhost:8080/api/posts/" + postId + "/comment",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer " + token
+                        },
+                        body: JSON.stringify({
+                            text: "Great post! 👍"
+                        })
+                    }
+                );
+
+                const data = await response.text();
+
+                alert(data);
+
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+        async function getComments() {
+            try {
+                const loginResponse = await fetch(
+                    "http://localhost:8080/api/users/login",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+
+                const postsResponse = await fetch(
+                    "http://localhost:8080/api/posts/all",
+                    {
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    }
+                );
+
+                const postsData = await postsResponse.json();
+
+                if (!postsData.posts || postsData.posts.length === 0) {
+                    alert("No posts found");
+                    return;
+                }
+
+                const postId = postsData.posts[0]._id;
+
+                const response = await fetch(
+                    "http://localhost:8080/api/posts/" + postId + "/comments",
+                    {
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    }
+                );
+
+                const data = await response.json();
+
+                alert(JSON.stringify(data));
+
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+        async function deletePost() {
+            try {
+                const loginResponse = await fetch(
+                    "http://localhost:8080/api/users/login",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+
+                const postsResponse = await fetch(
+                    "http://localhost:8080/api/posts/all",
+                    {
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    }
+                );
+
+                const postsData = await postsResponse.json();
+
+                if (!postsData.posts || postsData.posts.length === 0) {
+                    alert("No posts found");
+                    return;
+                }
+
+                const postId = postsData.posts[0]._id;
+
+                const response = await fetch(
+                    "http://localhost:8080/api/posts/" + postId,
+                    {
+                        method: "DELETE",
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    }
+                );
+
+                const data = await response.json();
+
+                alert(JSON.stringify(data));
+
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+        async function updatePost() {
+            try {
+                const loginResponse = await fetch(
+                    "http://localhost:8080/api/users/login",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: "test123@gmail.com",
+                            password: "123456"
+                        })
+                    }
+                );
+
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+
+                const postsResponse = await fetch(
+                    "http://localhost:8080/api/posts/all",
+                    {
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    }
+                );
+
+                const postsData = await postsResponse.json();
+
+                if (!postsData.posts || postsData.posts.length === 0) {
+                    alert("No posts found");
+                    return;
+                }
+
+                const postId = postsData.posts[0]._id;
+
+                const response = await fetch(
+                    "http://localhost:8080/api/posts/" + postId,
+                    {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer " + token
+                        },
+                        body: JSON.stringify({
+                            content: "This post has been updated! ✨"
+                        })
+                    }
+                );
+
+                const data = await response.json();
+
+                alert(JSON.stringify(data));
+
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+    </script>
+
+</body>
+
+</html>
