@@ -4,17 +4,30 @@ const UserSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
+        trim: true,
+        minlength: 2,
+        maxlength: 100,
     },
 
     email: {
         type: String,
         required: true,
         unique: true,
+        trim: true,
+        Lowercase: true,
     },
 
     password: {
         type: String,
         required: true,
+        minlength: 6,
+        select: false,
+    },
+    //New field for Job Seeker and Recuiter
+    role: {
+        type: String,
+        enum: ["jobseeker", "recruiter"],
+        default: "jobseeker"
     },
 
     active: {
@@ -25,6 +38,10 @@ const UserSchema = new mongoose.Schema({
     profilePicture: {
         type: String,
         default: "default.jpg",
+    },
+    resume: {
+        type: String,
+        default: "",
     },
 
     createdAt: {

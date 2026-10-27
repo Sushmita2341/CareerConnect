@@ -1,27 +1,31 @@
 const User = require("../models/user.model");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 
 // ================= REGISTER USER =================
 const registerUser = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password, role } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({
-                message: "Name, email and password are required"
+                message: "Name, email and password are required",
             });
         }
+        //Public registration creates jobseeker accounts only.
+        const selectedRole = "jobseeker";
+
 
         const normalizedEmail = email.trim().toLowerCase();
 
         const existingUser = await User.findOne({
-            email: normalizedEmail
+            email: normalizedEmail,
         });
 
         if (existingUser) {
             return res.status(409).json({
-                message: "Email already registered"
+                message: "Email already registered",
             });
         }
 
@@ -30,7 +34,8 @@ const registerUser = async (req, res) => {
         const user = await User.create({
             name: name.trim(),
             email: normalizedEmail,
-            password: hashedPassword
+            password: hashedPassword,
+            role: selectedRole,
         });
 
         return res.status(201).json({
@@ -38,13 +43,15 @@ const registerUser = async (req, res) => {
             user: {
                 _id: user._id,
                 name: user.name,
-                email: user.email
-            }
+                email: user.email,
+                role: user.role,
+            },
         });
     } catch (error) {
         console.error("REGISTER ERROR:", error);
+
         return res.status(500).json({
-            message: "Registration failed"
+            message: "Registration failed. Please try again",
         });
     }
 };
@@ -62,7 +69,7 @@ const loginUser = async (req, res) => {
 
         const user = await User.findOne({
             email: email.trim().toLowerCase()
-        });
+        }).select("+password");
 
         if (!user) {
             return res.status(401).json({
@@ -80,7 +87,13 @@ const loginUser = async (req, res) => {
                 message: "Invalid email or password"
             });
         }
+        if (!process.env.JWT_SECRET) {
+            console.error("JWT_SECRET is not configured.");
 
+            return res.status(500).json({
+                message: "Server authentication configuration error.",
+            });
+        }
         const token = jwt.sign(
             {
                 id: user._id.toString(),
@@ -97,12 +110,14 @@ const loginUser = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
+                role: user.role || "jobseeker",
                 profilePicture: user.profilePicture,
                 bio: user.bio || "",
                 skills: user.skills || [],
                 education: user.education || "",
                 experience: user.experience || ""
             }
+
         });
     } catch (error) {
         console.error("LOGIN ERROR:", error);
@@ -227,60 +242,144 @@ const getAllUsers = async (req, res) => {
 // ================= GET USER BY ID =================
 const getUserById = async (req, res) => {
     try {
-        const user = await User.findById(req.params.id)
-            .select("-password -token");
-
-        if (!user) {
-            return res.status(404).json({
-                message: "User not found"
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({
+                message: "Invalid user ID.",
             });
         }
-
-        return res.status(200).json({
-            user
-        });
-    } catch (error) {
-        console.error("GET USER BY ID ERROR:", error);
-        return res.status(500).json({
-            message: "Failed to fetch user"
-        });
-    }
+        const user = await User.findById(req.params.id).select("name email profilePicture bio skills education experience role createdAt"); if (!user) { return res.status(404).json({ message: "User not found.", }); } return res.status(200).json({ user });
+    } catch (error) { console.error("GET USER BY ID ERROR:", error); return res.status(500).json({ message: "Failed to fetch user.", }); }
 };
+
 const searchUsers = async (req, res) => {
     try {
-        const q = String(req.query.q || "").trim();
+        const { q = "" } = req.query;
+
+        const searchTerm = q.trim();
 
         const filter = {
-            _id: { $ne: req.user.id }
+            role: "jobseeker",
         };
 
-        if (q) {
-            const regex = new RegExp(
-                q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-                "i"
-            );
-
+        if (searchTerm) {
             filter.$or = [
-                { name: regex },
-                { email: regex },
-                { skills: regex }
+                { name: { $regex: searchTerm, $options: "i" } },
+                { skills: { $regex: searchTerm, $options: "i" } },
+                { education: { $regex: searchTerm, $options: "i" } },
             ];
         }
 
         const users = await User.find(filter)
-            .select("-password -token")
+            .select("name email profilePicture bio skills education experience")
             .limit(50)
-            .lean();
+            .sort({ createdAt: -1 });
 
-        res.status(200).json({ users });
+        return res.status(200).json(users);
     } catch (error) {
         console.error("SEARCH USERS ERROR:", error);
-        res.status(500).json({
-            message: "Failed to search users"
+        return res.status(500).json({
+            message: "Failed to search candidates",
         });
     }
 };
+const searchCandidates = async (req, res) => {
+    try {
+        const currentUser = await User.findById(req.user.id)
+            .select("role active");
 
+        if (
+            !currentUser ||
+            currentUser.active === false ||
+            currentUser.role !== "recruiter"
+        ) {
+            return res.status(403).json({
+                message: "Only active recruiters can search candidates.",
+            });
+        }
+
+        if (!currentUser || currentUser.role !== "recruiter") {
+            return res.status(403).json({
+                message: "Only recruiters can search candidates",
+            });
+        }
+
+        const { q = "" } = req.query;
+        const searchTerm = q.trim();
+
+        const filter = {
+            role: "jobseeker",
+        };
+
+        if (searchTerm) {
+            filter.$or = [
+                { name: { $regex: searchTerm, $options: "i" } },
+                { skills: { $regex: searchTerm, $options: "i" } },
+                { education: { $regex: searchTerm, $options: "i" } },
+            ];
+        }
+
+        const candidates = await User.find(filter)
+            .select("name email profilePicture resume bio skills education experience")
+            .limit(50)
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json(candidates);
+    } catch (error) {
+        console.error("SEARCH CANDIDATES ERROR:", error);
+        return res.status(500).json({
+            message: "Failed to search candidates",
+        });
+    }
+};
+const uploadResume = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        if (user.role !== "jobseeker") {
+            return res.status(403).json({
+                message: "Only jobseekers can upload resumes.",
+            });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({
+                message: "Please select a PDF resume.",
+            });
+        }
+
+        user.resume = req.file.filename;
+        await user.save();
+
+        return res.status(200).json({
+            message: "Resume uploaded successfully!",
+            resume: user.resume,
+        });
+    } catch (error) {
+        console.error("RESUME UPLOAD ERROR:", error);
+        return res.status(500).json({
+            message: "Unable to upload resume.",
+        });
+    }
+};
+const viewCandidateResume = async (req, res) => {
+    try {
+        // Validate candidate ID before querying MongoDB
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({
+                message: "Invalid candidate ID.",
+            });
+        }
+        // Confirm the requester is a recruiter
+        const requester = await User.findById(req.user.id).select("role"); if (!requester || requester.role !== "recruiter") { return res.status(403).json({ message: "Only recruiters can view candidate resumes.", }); } // Only allow viewing jobseeker resumes 
+        const candidate = await User.findById(req.params.id).select("role resume"); if (!candidate || candidate.role !== "jobseeker") { return res.status(404).json({ message: "Candidate not found.", }); } if (!candidate.resume) { return res.status(404).json({ message: "This candidate has not uploaded a resume.", }); } const path = require("path"); const fs = require("fs"); const uploadsDirectory = path.resolve(process.cwd(), "uploads"); const resumePath = path.resolve(uploadsDirectory, candidate.resume);
+        // Ensure the requested file remains inside the uploads directory
+        if (!resumePath.startsWith(uploadsDirectory + path.sep)) { return res.status(400).json({ message: "Invalid resume file path.", }); } if (!fs.existsSync(resumePath) || !fs.statSync(resumePath).isFile()) { return res.status(404).json({ message: "Resume file not found on the server.", }); } res.setHeader("Content-Type", "application/pdf"); res.setHeader("Content-Disposition", `inline; filename="${path.basename(resumePath)}"`); return res.sendFile(resumePath);
+    } catch (error) { console.error("VIEW RESUME ERROR:", error); return res.status(500).json({ message: "Unable to retrieve resume.", }); }
+};
 // ================= EXPORT CONTROLLERS =================
 module.exports = {
     registerUser,
@@ -289,5 +388,8 @@ module.exports = {
     updateProfile,
     getAllUsers,
     getUserById,
-    searchUsers
+    searchUsers,
+    searchCandidates,
+    uploadResume,
+    viewCandidateResume,
 };

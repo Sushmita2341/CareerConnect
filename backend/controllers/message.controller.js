@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Message = require("../models/message.model");
 const Connection = require("../models/connection.model");
 const User = require("../models/user.model");
+const Notification = require("../models/notification.model");
 
 // Get the current user's accepted connections
 async function getConnectedUserIds(userId) {
@@ -112,44 +113,8 @@ async function getMessages(req, res) {
     try {
         const currentUserId = req.user.id;
         const otherUserId = req.params.userId;
-
-        if (!mongoose.isValidObjectId(otherUserId)) {
-            return res.status(400).json({
-                message: "Invalid user ID.",
-            });
-        }
-
-        const connectedUserIds = await getConnectedUserIds(currentUserId);
-
-        if (!connectedUserIds.includes(otherUserId)) {
-            return res.status(403).json({
-                message: "You can message accepted connections only.",
-            });
-        }
-
-        const messages = await Message.find({
-            $or: [
-                {
-                    sender: currentUserId,
-                    recipient: otherUserId,
-                },
-                {
-                    sender: otherUserId,
-                    recipient: currentUserId,
-                },
-            ],
-        })
-            .sort({ createdAt: 1 })
-            .populate("sender", "name email profilePicture")
-            .populate("recipient", "name email profilePicture");
-
-        return res.status(200).json({ messages });
-    } catch (error) {
-        console.error("GET MESSAGES ERROR:", error);
-        return res.status(500).json({
-            message: "Unable to load messages.",
-        });
-    }
+        if (!mongoose.isValidObjectId(otherUserId)) { return res.status(400).json({ message: "Invalid user ID.", }); } const connectedUserIds = await getConnectedUserIds(currentUserId); if (!connectedUserIds.includes(otherUserId)) { return res.status(403).json({ message: "You can message accepted connections only.", }); } const messages = await Message.find({ $or: [{ sender: currentUserId, recipient: otherUserId, }, { sender: otherUserId, recipient: currentUserId, },], }).sort({ createdAt: -1 }).limit(100).populate("sender", "name email profilePicture").populate("recipient", "name email profilePicture"); messages.reverse(); return res.status(200).json({ messages });
+    } catch (error) { console.error("GET MESSAGES ERROR:", error); return res.status(500).json({ message: "Unable to load messages.", }); }
 }
 
 // POST /api/messages/:userId
@@ -161,61 +126,28 @@ async function sendMessage(req, res) {
             typeof req.body.text === "string"
                 ? req.body.text.trim()
                 : "";
+        if (!mongoose.isValidObjectId(recipientId)) { return res.status(400).json({ message: "Invalid recipient ID.", }); } if (!text) { return res.status(400).json({ message: "Message cannot be empty.", }); } if (text.length > 5000) { return res.status(400).json({ message: "Message must be 5000 characters or fewer.", }); } if (senderId.toString() === recipientId.toString()) { return res.status(400).json({ message: "You cannot message yourself.", }); } const recipient = await User.findById(recipientId).select("active"); if (!recipient || recipient.active === false) { return res.status(404).json({ message: "Recipient not found or unavailable.", }); } const connectedUserIds = await getConnectedUserIds(senderId); if (!connectedUserIds.includes(recipientId.toString())) { return res.status(403).json({ message: "You can message accepted connections only.", }); } const message = await Message.create({ sender: senderId, recipient: recipientId, text, }); const populatedMessage = await Message.findById(message._id).populate("sender", "name email profilePicture").populate("recipient", "name email profilePicture");
+        // Create a notification for the recipient.
+        try {
+            const sender = await User.findById(senderId).select("name");
 
-        if (!mongoose.isValidObjectId(recipientId)) {
-            return res.status(400).json({
-                message: "Invalid recipient ID.",
+            await Notification.create({
+                recipient: recipientId,
+                sender: senderId,
+                type: "message",
+                message: `${sender?.name || "Someone"} sent you a message.`,
+                link: "messages",
+                relatedId: message._id,
             });
+        } catch (notificationError) {
+            console.error(
+                "MESSAGE NOTIFICATION ERROR:",
+                notificationError
+            );
         }
-
-        if (!text) {
-            return res.status(400).json({
-                message: "Message cannot be empty.",
-            });
-        }
-
-        if (text.length > 5000) {
-            return res.status(400).json({
-                message: "Message must be 5000 characters or fewer.",
-            });
-        }
-
-        if (senderId.toString() === recipientId) {
-            return res.status(400).json({
-                message: "You cannot message yourself.",
-            });
-        }
-
-        const connectedUserIds = await getConnectedUserIds(senderId);
-
-        if (!connectedUserIds.includes(recipientId)) {
-            return res.status(403).json({
-                message: "You can message accepted connections only.",
-            });
-        }
-
-        const message = await Message.create({
-            sender: senderId,
-            recipient: recipientId,
-            text,
-        });
-
-        const populatedMessage = await Message.findById(message._id)
-            .populate("sender", "name email profilePicture")
-            .populate("recipient", "name email profilePicture");
-
-        return res.status(201).json({
-            message: "Message sent successfully.",
-            newMessage: populatedMessage,
-        });
-    } catch (error) {
-        console.error("SEND MESSAGE ERROR:", error);
-        return res.status(500).json({
-            message: "Unable to send message.",
-        });
-    }
+        return res.status(201).json({ message: "Message sent successfully.", newMessage: populatedMessage, });
+    } catch (error) { console.error("SEND MESSAGE ERROR:", error); return res.status(500).json({ message: "Unable to send message.", }); }
 }
-
 module.exports = {
     getConversations,
     getMessages,

@@ -50,6 +50,27 @@ const getPosts = async (req, res) => {
         });
     }
 };
+const getUserPosts = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const posts = await Post.find({ user: userId })
+            .populate("user", "name email profilePicture")
+            .populate("comments.user", "name profilePicture")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            message: "User posts fetched successfully",
+            posts
+        });
+    } catch (error) {
+        console.log("GET USER POSTS ERROR:", error);
+
+        res.status(500).json({
+            message: "Unable to fetch user posts"
+        });
+    }
+};
 const likePost = async (req, res) => {
     try {
         const { id } = req.params;
@@ -150,6 +171,20 @@ const getComments = async (req, res) => {
         });
     }
 };
+const updateComment = async (req, res) => {
+    try {
+        const { id, commentId } = req.params; const { text } = req.body; if (!text || !text.trim()) { return res.status(400).json({ message: "Comment text is required" }); } const post = await Post.findById(id); if (!post) { return res.status(404).json({ message: "Post not found" }); } const comment = post.comments.id(commentId); if (!comment) { return res.status(404).json({ message: "Comment not found" }); }
+        // Only the comment owner can edit it 
+        if (comment.user.toString() !== req.user.id) { return res.status(403).json({ message: "You can only edit your own comment" }); } comment.text = text.trim(); await post.save(); res.status(200).json({ message: "Comment updated successfully", comment });
+    } catch (error) { console.log("UPDATE COMMENT ERROR:", error); res.status(500).json({ message: "Unable to update comment" }); }
+}; const deleteComment = async (req, res) => {
+    try {
+        const { id, commentId } = req.params; const post = await Post.findById(id); if (!post) { return res.status(404).json({ message: "Post not found" }); } const comment = post.comments.id(commentId); if (!comment) { return res.status(404).json({ message: "Comment not found" }); }
+        // Only the comment owner can delete it 
+        if (comment.user.toString() !== req.user.id) { return res.status(403).json({ message: "You can only delete your own comment" }); } comment.deleteOne(); await post.save(); res.status(200).json({ message: "Comment deleted successfully", commentId });
+    } catch (error) { console.log("DELETE COMMENT ERROR:", error); res.status(500).json({ message: "Unable to delete comment" }); }
+};
+
 const deletePost = async (req, res) => {
     try {
         const { id } = req.params;
@@ -229,9 +264,12 @@ const updatePost = async (req, res) => {
 module.exports = {
     createPost,
     getPosts,
+    getUserPosts,
     likePost,
     addComment,
     getComments,
+    updateComment,
+    deleteComment,
     deletePost,
     updatePost
 };
